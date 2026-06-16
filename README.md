@@ -31,7 +31,12 @@
 | Build | Hardware | Highlights |
 |---|---|---|
 | **PaperPay** (this folder) | ESP32‑S3‑N16R8 + Waveshare 2.9" e‑paper | Cheapest; bill from the phone dashboard |
-| **[M5PaperPay](M5paperpay/)** | M5Stack **M5Paper** (4.7" e‑ink, touch, RTC, battery) | **Bill on the device** (touch keypad), big QR, portable |
+| **[M5PaperPay](M5paperpay/)** | M5Stack **M5Paper** (4.7" e‑ink, touch, RTC, battery) | **Bill on the device** (calculator + QR), portable |
+
+<table align="center"><tr>
+  <td align="center"><img src="assets/device.svg" width="430"/><br/><sub>PaperPay — ESP32‑S3 + Waveshare 2.9"</sub></td>
+  <td align="center"><img src="M5paperpay/assets/m5-calculator.svg" width="430"/><br/><sub>M5PaperPay — M5Paper calculator + UPI</sub></td>
+</tr></table>
 
 Both share the same logic (web dashboard, UPI QR, payment log, Telegram). See
 **[`M5paperpay/`](M5paperpay/)** for the M5Paper port.

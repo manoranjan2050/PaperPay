@@ -20,7 +20,7 @@
 
 <!-- ============================ SCREENS ============================ -->
 <table align="center"><tr>
-  <td align="center"><img src="assets/m5-keypad.svg" width="430"/><br/><sub>① Bill on the touchscreen</sub></td>
+  <td align="center"><img src="assets/m5-calculator.svg" width="430"/><br/><sub>① Bill with the on-device calculator</sub></td>
   <td align="center"><img src="assets/m5-payment.svg" width="430"/><br/><sub>② Customer scans the QR</sub></td>
 </tr></table>
 
@@ -53,7 +53,7 @@ marks the bill paid automatically, flipping the screen to ✓ Paid).
 ---
 
 ## ✨ On the device
-- 🔢 **Touch keypad** → **CHARGE** (UPI QR) or **CASH PAID**
+- 🧮 **On-device calculator** (`+ − × ÷ =`) — e.g. `30 × 2 + 40` → **CHARGE** (UPI QR) or **CASH PAID**
 - 🧾 **Big QR** facing the customer; **MARK PAID / CANCEL**
 - 🕒 **Date + time** (onboard RTC) and 🔋 **battery %** in the header
 - 📱 Phone/PC dashboard still served over WiFi (calculator, payments log, settings)
