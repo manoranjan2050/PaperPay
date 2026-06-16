@@ -84,7 +84,16 @@ static void header() {
   int batt = M5.Power.getBatteryLevel();
   if (batt >= 0) snprintf(rb, sizeof(rb), "%s    %d%%", tb, batt);
   else           snprintf(rb, sizeof(rb), "%s", tb);
-  txt(rb, SCR_W - 16, 20, 0.9, lgfx::TR_DATUM);
+
+  cv->setTextFont(4); cv->setTextSize(0.9); cv->setTextDatum(lgfx::TR_DATUM);
+  if (batt >= 0 && batt < 15) {                  // low battery -> inverted chip
+    int w = cv->textWidth(rb);
+    cv->fillRoundRect(SCR_W - 16 - w - 12, 8, w + 18, 38, 6, C_BLACK);
+    cv->setTextColor(C_WHITE);
+  } else {
+    cv->setTextColor(C_BLACK);
+  }
+  cv->drawString(rb, SCR_W - 18, 16);
   cv->drawLine(0, 56, SCR_W, 56, C_BLACK);
 }
 
@@ -273,6 +282,14 @@ void displayService() {
     auto t = M5.Touch.getDetail(0);
     if (t.wasClicked()) onTap(t.x, t.y);
   }
+
+  // auto-return to the keypad ~4s after a payment is marked paid
+  static Mode lastMode = Mode::Boot;
+  static uint32_t paidAt = 0;
+  if (mode == Mode::Paid && lastMode != Mode::Paid) paidAt = millis();
+  lastMode = mode;
+  if (mode == Mode::Paid && millis() - paidAt > 4000) { mode = Mode::Bill; render(); }
+
   // keep the idle clock current (cheap, only while idle)
   static uint32_t lastClock = 0;
   if (mode == Mode::Idle && millis() - lastClock > 60000) { lastClock = millis(); render(); }
