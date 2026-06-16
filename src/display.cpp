@@ -35,10 +35,14 @@ static void setJob(Job j) {
 
 void displayInit() {
   mtx = xSemaphoreCreateMutex();
+  pinMode(PIN_EPD_BUSY, INPUT);
+  Serial.printf("[epd] init  BUSY pin level=%d (HIGH usually = busy)\n",
+                digitalRead(PIN_EPD_BUSY));
   SPI.begin(PIN_EPD_SCK, PIN_EPD_MISO, PIN_EPD_MOSI, PIN_EPD_CS);
   epd.init(115200, true, 2, false);
   epd.setRotation(1);            // landscape: 296 wide x 128 tall
   epd.setTextColor(GxEPD_BLACK);
+  Serial.printf("[epd] init done  w=%d h=%d\n", epd.width(), epd.height());
 }
 
 // ---- queue helpers (called from web task) ----------------------------------
@@ -161,6 +165,9 @@ void displayService() {
   pending = Job::None;
   xSemaphoreGive(mtx);
 
+  if (job == Job::None) return;
+  Serial.printf("[epd] rendering job=%d  BUSY=%d\n", (int)job, digitalRead(PIN_EPD_BUSY));
+  uint32_t t0 = millis();
   switch (job) {
     case Job::Boot:    renderBoot();    break;
     case Job::Idle:    renderIdle();    break;
@@ -169,4 +176,5 @@ void displayService() {
     default: return;
   }
   epd.hibernate(); // low power between updates
+  Serial.printf("[epd] render done in %lums\n", millis() - t0);
 }

@@ -2,12 +2,9 @@
 //  PaperPay — E-Paper UPI Counter
 //  ESP32-S3-N16R8 + Waveshare 2.9" e-paper
 //
-//  Flow:
-//    1. First boot -> captive portal "PaperPay-Setup" to join WiFi + enter
-//       UPI ID / payee / shop name.
-//    2. Hosts a mobile-friendly dashboard at http://paperpay.local
-//    3. Bill an amount -> a UPI QR appears on the e-paper + the dashboard.
-//    4. Customer scans with any UPI app and pays. Mark Paid to log it.
+//  Boot order is deliberate: WiFi (captive portal) comes up FIRST and runs
+//  non-blocking, so a missing/miswired e-paper can never stop the AP from
+//  appearing. The display is rendered from loop() and is allowed to fail.
 // ============================================================================
 #include <Arduino.h>
 #include <WiFi.h>
@@ -21,63 +18,89 @@
 #include "store.h"
 #include "web.h"
 
-static void startMdns() {
+static WiFiManager*          wm    = nullptr;
+static WiFiManagerParameter* pVpa  = nullptr;
+static WiFiManagerParameter* pPayee= nullptr;
+static WiFiManagerParameter* pShop = nullptr;
+
+static bool servicesUp = false;
+
+// portal "Save" pressed -> persist the UPI fields the user typed
+static void onSaveParams() {
+  if (strlen(pVpa->getValue()))   CFG.vpa      = pVpa->getValue();
+  if (strlen(pPayee->getValue())) CFG.payee    = pPayee->getValue();
+  if (strlen(pShop->getValue()))  CFG.shopName = pShop->getValue();
+  configSave();
+  Serial.printf("[cfg] saved from portal: vpa=%s shop=%s\n",
+                CFG.vpa.c_str(), CFG.shopName.c_str());
+}
+
+// runs once, the moment we first reach STA-connected
+static void onConnected() {
+  servicesUp = true;
+  Serial.printf("[wifi] CONNECTED  ip=%s  rssi=%d\n",
+                WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
+  configTime(CFG.tzOffset, 0, "pool.ntp.org", "time.google.com");
   if (MDNS.begin(MDNS_HOST)) {
     MDNS.addService("http", "tcp", 80);
     Serial.printf("[mdns] http://%s.local\n", MDNS_HOST);
   }
+  webBegin();
+  displayQueueIdle(CFG.shopName, MDNS_HOST, WiFi.localIP().toString());
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(200);
-  Serial.println("\n=== PaperPay booting ===");
+  delay(400);
+  Serial.println("\n\n=== PaperPay booting ===");
 
-  if (!LittleFS.begin(true)) Serial.println("[fs] LittleFS mount failed");
+  if (!LittleFS.begin(true)) Serial.println("[fs] LittleFS mount FAILED");
+  else                       Serial.println("[fs] LittleFS ok");
   configLoad();
   storeInit();
 
-  displayInit();
-  displayBoot("Starting WiFi setup...", "Join AP: " SETUP_AP_NAME);
-  displayService();
+  displayInit();                                   // pins/SPI only, no refresh
+  displayBoot("WiFi setup:", "Join AP " SETUP_AP_NAME);   // queued, drawn in loop()
 
-  // ---- WiFi + onboarding ----------------------------------------------------
-  WiFiManager wm;
-  WiFiManagerParameter pVpa  ("vpa",   "UPI ID (VPA)",  CFG.vpa.c_str(),      64);
-  WiFiManagerParameter pPayee("payee", "Payee name",    CFG.payee.c_str(),    48);
-  WiFiManagerParameter pShop ("shop",  "Shop name",     CFG.shopName.c_str(), 48);
-  wm.addParameter(&pVpa);
-  wm.addParameter(&pPayee);
-  wm.addParameter(&pShop);
-  wm.setConfigPortalTimeout(0); // stay in portal until configured
+  // ---- WiFi: non-blocking captive portal -----------------------------------
+  WiFi.mode(WIFI_STA);
+  wm     = new WiFiManager();
+  pVpa   = new WiFiManagerParameter("vpa",   "UPI ID (VPA)", CFG.vpa.c_str(),      64);
+  pPayee = new WiFiManagerParameter("payee", "Payee name",   CFG.payee.c_str(),    48);
+  pShop  = new WiFiManagerParameter("shop",  "Shop name",    CFG.shopName.c_str(), 48);
+  wm->addParameter(pVpa);
+  wm->addParameter(pPayee);
+  wm->addParameter(pShop);
+  wm->setSaveParamsCallback(onSaveParams);
+  wm->setConfigPortalBlocking(false);   // <-- AP runs from loop(), never blocks
+  wm->setConfigPortalTimeout(0);        // keep portal up until configured
+  wm->setHostname(MDNS_HOST);
 
-  bool ok = wm.autoConnect(SETUP_AP_NAME);
-  if (ok) {
-    // persist anything entered in the portal
-    if (strlen(pVpa.getValue()))   CFG.vpa      = pVpa.getValue();
-    if (strlen(pPayee.getValue())) CFG.payee    = pPayee.getValue();
-    if (strlen(pShop.getValue()))  CFG.shopName = pShop.getValue();
-    configSave();
-    Serial.printf("[wifi] connected: %s\n", WiFi.localIP().toString().c_str());
-  } else {
-    Serial.println("[wifi] not connected");
-  }
+  bool connected = wm->autoConnect(SETUP_AP_NAME);
+  Serial.printf("[wifi] autoConnect=%d  (if 0, AP '%s' is now broadcasting)\n",
+                connected, SETUP_AP_NAME);
+  Serial.printf("[wifi] portal active=%d  AP IP=%s\n",
+                wm->getConfigPortalActive(), WiFi.softAPIP().toString().c_str());
 
-  configTime(CFG.tzOffset, 0, "pool.ntp.org", "time.google.com");
-  startMdns();
-  webBegin();
-
-  displayQueueIdle(CFG.shopName, MDNS_HOST, WiFi.localIP().toString());
+  if (connected) onConnected();
 }
 
 void loop() {
-  displayService();          // render any queued e-paper job (SPI on loop task)
+  wm->process();        // service the captive portal (non-blocking)
+  displayService();     // render any queued e-paper job (may be slow, that's ok)
 
-  // auto-reconnect if WiFi drops
-  static uint32_t lastChk = 0;
-  if (millis() - lastChk > 10000) {
-    lastChk = millis();
-    if (!WiFi.isConnected()) WiFi.reconnect();
+  // detect the first STA connection that happens via the portal
+  if (!servicesUp && WiFi.status() == WL_CONNECTED) onConnected();
+
+  // heartbeat so the serial monitor always shows life + state
+  static uint32_t t = 0;
+  if (millis() - t > 3000) {
+    t = millis();
+    Serial.printf("[hb] up=%lus  sta=%d  portal=%d  ip=%s  apClients=%d\n",
+                  millis()/1000, WiFi.status() == WL_CONNECTED,
+                  wm->getConfigPortalActive(),
+                  WiFi.localIP().toString().c_str(),
+                  WiFi.softAPgetStationNum());
   }
-  delay(50);
+  delay(20);
 }
