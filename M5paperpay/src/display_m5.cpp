@@ -48,8 +48,8 @@ static Btn keys[12] = {
 };
 static Btn bCharge = {500,180,440,150,"CHARGE  (show UPI QR)"};
 static Btn bCash   = {500,346,440,90,"CASH PAID"};
-static Btn bPaid   = {40,360,300,120,"MARK PAID"};
-static Btn bCancel = {360,360,180,120,"CANCEL"};
+static Btn bPaid   = {40,392,210,78,"MARK PAID"};
+static Btn bCancel = {270,392,170,78,"CANCEL"};
 
 static bool inRect(const Btn& b, int x, int y) {
   return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
@@ -72,17 +72,26 @@ static void drawBtn(const Btn& b, bool filled, float size) {
 
 static void push(epd_mode_t m) { M5.Display.setEpdMode(m); cv->pushSprite(0, 0); }
 
-static void header(const String& right) {
+static void header() {
   cv->fillRect(0, 0, SCR_W, 56, C_WHITE);
   txt(CFG.shopName.length() ? CFG.shopName : String("PaperPay"), 16, 16, 1.0, lgfx::TL_DATUM);
-  txt(right, SCR_W - 16, 20, 0.8, lgfx::TR_DATUM);
+
+  // right side: date + time + battery
+  char rb[48], tb[24];
+  time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
+  if (ti.tm_year > 120) strftime(tb, sizeof(tb), "%d %b  %H:%M", &ti);
+  else                  strcpy(tb, "--:--");
+  int batt = M5.Power.getBatteryLevel();
+  if (batt >= 0) snprintf(rb, sizeof(rb), "%s    %d%%", tb, batt);
+  else           snprintf(rb, sizeof(rb), "%s", tb);
+  txt(rb, SCR_W - 16, 20, 0.9, lgfx::TR_DATUM);
   cv->drawLine(0, 56, SCR_W, 56, C_BLACK);
 }
 
 // ---- screens ----------------------------------------------------------------
 static void renderBill(epd_mode_t m = epd_mode_t::epd_fast) {
   cv->fillSprite(C_WHITE);
-  header("UPI Counter");
+  header();
 
   cv->drawRoundRect(20, 66, 920, 96, 12, C_BLACK);
   txt("Amount to charge", 36, 78, 0.8, lgfx::TL_DATUM);
@@ -97,18 +106,23 @@ static void renderBill(epd_mode_t m = epd_mode_t::epd_fast) {
 
 static void renderPayment() {
   cv->fillSprite(C_WHITE);
-  header("Scan to Pay");
+  header();
 
   char amt[24]; snprintf(amt, sizeof(amt), "%s %.2f", CFG.currency.c_str(), curAmount);
-  txt(amt, 40, 110, 2.4, lgfx::TL_DATUM);
-  txt("Scan with any UPI app", 40, 250, 1.0, lgfx::TL_DATUM);
-  drawBtn(bPaid, true, 1.0);
-  drawBtn(bCancel, false, 1.0);
+  txt(amt, 40, 100, 2.2, lgfx::TL_DATUM);
+  txt("Scan with any", 40, 220, 1.0, lgfx::TL_DATUM);
+  txt("UPI app to pay", 40, 270, 1.0, lgfx::TL_DATUM);
+  drawBtn(bPaid, true, 0.9);
+  drawBtn(bCancel, false, 0.9);
 
+  // QR confined to the right half so it never overlaps the buttons
   QRCode qr; uint8_t* buf = nullptr;
   if (qrBuild(curUpi, &qr, &buf) == 0) {
-    int avail = 420, scale = avail / qr.size, dim = scale * qr.size;
-    int x0 = 540 + (400 - dim) / 2, y0 = 60;
+    int boxX = 500, boxY = 70, boxW = 440, boxH = 430;
+    int budget = (boxW < boxH ? boxW : boxH);
+    int scale = budget / qr.size; if (scale < 1) scale = 1;
+    int dim = scale * qr.size;
+    int x0 = boxX + (boxW - dim) / 2, y0 = boxY + (boxH - dim) / 2;
     cv->fillRect(x0 - 12, y0 - 12, dim + 24, dim + 24, C_WHITE);
     for (uint8_t y = 0; y < qr.size; y++)
       for (uint8_t x = 0; x < qr.size; x++)
@@ -134,9 +148,9 @@ static void renderPaid() {
 
 static void renderIdle() {
   cv->fillSprite(C_WHITE);
-  header(pIp);
-  txt("Ready", SCR_W / 2, 200, 2.0, lgfx::MC_DATUM);
-  txt("http://" + pHost + ".local", SCR_W / 2, 300, 1.0, lgfx::MC_DATUM);
+  header();
+  txt("Ready", SCR_W / 2, 190, 2.0, lgfx::MC_DATUM);
+  txt("http://" + pIp, SCR_W / 2, 300, 1.0, lgfx::MC_DATUM);
   txt("Tap the screen to bill on the device", SCR_W / 2, 370, 0.9, lgfx::MC_DATUM);
   push(epd_mode_t::epd_quality);
 }
@@ -259,4 +273,7 @@ void displayService() {
     auto t = M5.Touch.getDetail(0);
     if (t.wasClicked()) onTap(t.x, t.y);
   }
+  // keep the idle clock current (cheap, only while idle)
+  static uint32_t lastClock = 0;
+  if (mode == Mode::Idle && millis() - lastClock > 60000) { lastClock = millis(); render(); }
 }
