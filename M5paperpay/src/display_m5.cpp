@@ -79,7 +79,7 @@ static void header() {
   // right side: date + time + battery
   char rb[48], tb[24];
   time_t now; time(&now); struct tm ti; localtime_r(&now, &ti);
-  if (ti.tm_year > 120) strftime(tb, sizeof(tb), "%d %b  %H:%M", &ti);
+  if (ti.tm_year > 120) strftime(tb, sizeof(tb), "%d %b  %I:%M %p", &ti);  // 12-hour
   else                  strcpy(tb, "--:--");
   int batt = M5.Power.getBatteryLevel();
   if (batt >= 0) snprintf(rb, sizeof(rb), "%s    %d%%", tb, batt);
