@@ -63,7 +63,7 @@ void setup() {
   displayBoot("WiFi setup:", "Join AP " SETUP_AP_NAME);   // queued, drawn in loop()
 
   // ---- WiFi: non-blocking captive portal -----------------------------------
-  WiFi.mode(WIFI_STA);
+  WiFi.persistent(true);
   wm     = new WiFiManager();
   pVpa   = new WiFiManagerParameter("vpa",   "UPI ID (VPA)", CFG.vpa.c_str(),      64);
   pPayee = new WiFiManagerParameter("payee", "Payee name",   CFG.payee.c_str(),    48);
@@ -75,14 +75,28 @@ void setup() {
   wm->setConfigPortalBlocking(false);   // <-- AP runs from loop(), never blocks
   wm->setConfigPortalTimeout(0);        // keep portal up until configured
   wm->setHostname(MDNS_HOST);
+  wm->setWiFiAPChannel(6);              // pin to a common clean 2.4 GHz channel
 
   bool connected = wm->autoConnect(SETUP_AP_NAME);
-  Serial.printf("[wifi] autoConnect=%d  (if 0, AP '%s' is now broadcasting)\n",
-                connected, SETUP_AP_NAME);
-  Serial.printf("[wifi] portal active=%d  AP IP=%s\n",
-                wm->getConfigPortalActive(), WiFi.softAPIP().toString().c_str());
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX so the AP is easy to find
+  Serial.printf("[wifi] autoConnect=%d\n", connected);
 
-  if (connected) onConnected();
+  if (connected) {
+    onConnected();
+  } else {
+    // make sure the soft-AP is REALLY broadcasting (core 3.x non-blocking quirk)
+    delay(150);
+    Serial.printf("[wifi] mode=%d  portal=%d  apIP=%s  apSSID=%s\n",
+                  WiFi.getMode(), wm->getConfigPortalActive(),
+                  WiFi.softAPIP().toString().c_str(), WiFi.softAPSSID().c_str());
+    if (WiFi.softAPIP() == IPAddress(0, 0, 0, 0)) {
+      Serial.println("[wifi] soft-AP down -> forcing startConfigPortal()");
+      WiFi.mode(WIFI_AP_STA);
+      wm->startConfigPortal(SETUP_AP_NAME);
+      Serial.printf("[wifi] after force: apIP=%s  apSSID=%s\n",
+                    WiFi.softAPIP().toString().c_str(), WiFi.softAPSSID().c_str());
+    }
+  }
 }
 
 void loop() {
@@ -96,10 +110,11 @@ void loop() {
   static uint32_t t = 0;
   if (millis() - t > 3000) {
     t = millis();
-    Serial.printf("[hb] up=%lus  sta=%d  portal=%d  ip=%s  apClients=%d\n",
+    Serial.printf("[hb] up=%lus sta=%d portal=%d mode=%d apIP=%s apSSID='%s' apClients=%d\n",
                   millis()/1000, WiFi.status() == WL_CONNECTED,
-                  wm->getConfigPortalActive(),
-                  WiFi.localIP().toString().c_str(),
+                  wm->getConfigPortalActive(), WiFi.getMode(),
+                  WiFi.softAPIP().toString().c_str(),
+                  WiFi.softAPSSID().c_str(),
                   WiFi.softAPgetStationNum());
   }
   delay(20);
