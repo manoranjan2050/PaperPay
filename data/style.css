@@ -67,6 +67,13 @@ main{max-width:520px;margin:0 auto;padding:16px}
 .pill.cancel{background:#3a1212;color:var(--danger)}
 .tx .mini{padding:6px 10px;font-size:12px}
 
+.sec{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--brand);
+  margin:22px 0 10px;border-top:1px solid var(--line);padding-top:16px}
+.sec:first-child{border-top:none;padding-top:0;margin-top:4px}
+.wifi{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:10px 12px;cursor:pointer}
+.wifi:active{background:var(--card2)}
+.wifi .grow{flex:1}
 .fld{display:block;margin-bottom:12px}
 .fld span{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
 .fld input{width:100%;padding:13px;background:var(--card);border:1px solid var(--line);

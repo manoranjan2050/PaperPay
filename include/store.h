@@ -20,5 +20,12 @@ uint32_t storeAdd(double amount, const String& note);  // -> new pending id
 bool     storeSetStatus(uint32_t id, uint8_t status);
 bool     storeGet(uint32_t id, Txn& out);
 
+// Mark the OLDEST pending bill whose amount == `amount` (within 1 paisa) paid.
+// Returns the matched id, or 0 if none. Used by Telegram auto-confirm.
+uint32_t storeMarkOldestPendingPaid(double amount);
+
+// Today's paid total/count + number of pending bills (uses local time).
+void     storeSummary(double& todayTotal, uint32_t& todayCount, uint32_t& pending);
+
 // Serialize the whole (capped) log into a JSON array document.
 void     storeToJson(JsonArray arr);

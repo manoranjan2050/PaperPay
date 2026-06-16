@@ -68,14 +68,40 @@
 
     <!-- ========================= SETTINGS ========================= -->
     <section id="tab-set" class="tab">
+      <h3 class="sec">🏪 Shop</h3>
       <label class="fld"><span>UPI ID (VPA)</span><input id="cVpa" placeholder="shop@okhdfcbank" /></label>
       <label class="fld"><span>Payee name</span><input id="cPayee" placeholder="My Shop" /></label>
       <label class="fld"><span>Shop name</span><input id="cShop" placeholder="My Shop" /></label>
       <label class="fld"><span>Currency symbol</span><input id="cCur" placeholder="Rs" /></label>
       <label class="fld"><span>Default GST %</span><input id="cGst" type="number" step="0.1" placeholder="0" /></label>
       <label class="fld"><span>Timezone offset (sec)</span><input id="cTz" type="number" placeholder="19800" /></label>
-      <button class="btn primary" id="saveCfg">Save settings</button>
-      <p class="muted small">Find your UPI ID in any UPI app (PhonePe/GPay/Paytm) → "My QR / Payment address". IST offset = 19800.</p>
+
+      <h3 class="sec">🤖 Telegram</h3>
+      <label class="gst-row" style="justify-content:flex-start">
+        <input type="checkbox" id="cTgEn" /><span>Enable Telegram</span></label>
+      <label class="fld"><span>Bot token (from @BotFather)</span><input id="cTgTok" placeholder="123456:ABC-..." /></label>
+      <label class="fld"><span>Chat ID (yours / group)</span><input id="cTgChat" placeholder="e.g. 123456789" /></label>
+      <label class="gst-row" style="justify-content:flex-start">
+        <input type="checkbox" id="cTgAuto" /><span>Auto-mark paid from forwarded payment SMS</span></label>
+      <button class="btn ghost" id="tgTest">Send test message</button>
+      <p class="muted small">Create a bot with @BotFather, paste the token, message the bot once, and put your chat ID here. Forward your bank/UPI "credited ₹X" SMS to this chat to auto-confirm the matching bill.</p>
+
+      <button class="btn primary big" id="saveCfg">💾 Save all settings</button>
+
+      <h3 class="sec">📶 WiFi</h3>
+      <div id="wifiNow" class="muted small">…</div>
+      <div id="wifiList" class="txlist" style="margin:10px 0"></div>
+      <button class="btn ghost" id="wifiScan">Scan networks</button>
+      <input id="wifiSsid" class="note" placeholder="Network name (SSID)" />
+      <input id="wifiPass" class="note" type="password" placeholder="WiFi password" />
+      <button class="btn primary" id="wifiConnect">Connect to this WiFi</button>
+
+      <h3 class="sec">🔧 Device</h3>
+      <div class="row">
+        <button class="btn ghost" id="btnReboot">Reboot</button>
+        <button class="btn danger" id="btnResetWifi">Forget WiFi</button>
+      </div>
+      <p class="muted small">"Forget WiFi" erases the saved network and reopens the PaperPay-Setup hotspot.</p>
     </section>
   </main>
 

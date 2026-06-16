@@ -17,6 +17,21 @@
 #include "display.h"
 #include "store.h"
 #include "web.h"
+#include "telegram.h"
+#include "netctl.h"
+
+// ---- deferred network actions (requested by web task, run on loop task) -----
+static SemaphoreHandle_t netMtx;
+static volatile bool reqReboot = false, reqReset = false, reqConnect = false;
+static String reqSsid, reqPass;
+
+void netRequestWifiConnect(const String& ssid, const String& pass) {
+  xSemaphoreTake(netMtx, portMAX_DELAY);
+  reqSsid = ssid; reqPass = pass; reqConnect = true;
+  xSemaphoreGive(netMtx);
+}
+void netRequestReboot()    { reqReboot = true; }
+void netRequestWifiReset() { reqReset  = true; }
 
 static WiFiManager*          wm    = nullptr;
 static WiFiManagerParameter* pVpa  = nullptr;
@@ -50,6 +65,24 @@ static void onConnected() {
   }
   webBegin();
   displayQueueIdle(CFG.shopName, MDNS_HOST, WiFi.localIP().toString());
+  tgNotify("PaperPay online at http://" + WiFi.localIP().toString());
+}
+
+// deferred network actions, executed safely on the loop task
+void netService() {
+  if (reqReboot) { delay(200); ESP.restart(); }
+  if (reqReset)  { if (wm) wm->resetSettings(); delay(200); ESP.restart(); }
+  if (reqConnect) {
+    String ssid, pass;
+    xSemaphoreTake(netMtx, portMAX_DELAY);
+    ssid = reqSsid; pass = reqPass; reqConnect = false;
+    xSemaphoreGive(netMtx);
+    Serial.printf("[wifi] switching to SSID '%s'\n", ssid.c_str());
+    WiFi.persistent(true);
+    WiFi.disconnect();
+    delay(100);
+    WiFi.begin(ssid.c_str(), pass.c_str());   // creds persist; auto-reconnect handles failure
+  }
 }
 
 void setup() {
@@ -61,6 +94,8 @@ void setup() {
   else                       Serial.println("[fs] LittleFS ok");
   configLoad();
   storeInit();
+  netMtx = xSemaphoreCreateMutex();
+  tgInit();                                        // Telegram task (idle until configured)
 
   displayInit();                                   // pins/SPI only, no refresh
   displayBoot("WiFi setup:", "Join AP " SETUP_AP_NAME);   // queued, drawn in loop()
@@ -106,6 +141,7 @@ void setup() {
 void loop() {
   wm->process();        // service the captive portal (non-blocking)
   displayService();     // render any queued e-paper job (may be slow, that's ok)
+  netService();         // apply any pending WiFi-switch / reboot / reset
 
   // detect the first STA connection that happens via the portal
   if (!servicesUp && WiFi.status() == WL_CONNECTED) onConnected();
@@ -114,12 +150,10 @@ void loop() {
   static uint32_t t = 0;
   if (millis() - t > 3000) {
     t = millis();
-    Serial.printf("[hb] up=%lus sta=%d staIP=%s rssi=%d portal=%d mode=%d apIP=%s apClients=%d\n",
+    Serial.printf("[hb] up=%lus sta=%d staIP=%s rssi=%d heap=%u web=%d\n",
                   millis()/1000, WiFi.status() == WL_CONNECTED,
                   WiFi.localIP().toString().c_str(), (int)WiFi.RSSI(),
-                  wm->getConfigPortalActive(), WiFi.getMode(),
-                  WiFi.softAPIP().toString().c_str(),
-                  WiFi.softAPgetStationNum());
+                  ESP.getFreeHeap(), (int)servicesUp);
   }
   delay(20);
 }

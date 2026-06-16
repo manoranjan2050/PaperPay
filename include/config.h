@@ -33,6 +33,13 @@ struct ShopConfig {
   String currency;   // symbol, default "Rs"
   float  gstPercent; // optional default GST %, 0 = off
   long   tzOffset;   // seconds east of UTC for timestamps (IST = 19800)
+
+  // --- Telegram integration ---
+  String tgToken;    // bot token from @BotFather
+  String tgChat;     // chat id to send to / accept commands from
+  bool   tgEnable;   // master on/off
+  bool   tgAutoPaid; // auto-mark a pending bill paid when a matching amount
+                     // appears in a Telegram message (forwarded bank/UPI SMS)
 };
 
 extern ShopConfig CFG;

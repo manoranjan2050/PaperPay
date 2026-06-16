@@ -17,6 +17,10 @@ void configLoad() {
   CFG.currency   = prefs.getString("cur", "Rs");
   CFG.gstPercent = prefs.getFloat("gst", 0.0f);
   CFG.tzOffset   = prefs.getLong("tz", 19800); // IST default
+  CFG.tgToken    = prefs.getString("tgtok", "");
+  CFG.tgChat     = prefs.getString("tgchat", "");
+  CFG.tgEnable   = prefs.getBool("tgen", false);
+  CFG.tgAutoPaid = prefs.getBool("tgauto", true);
   prefs.end();
 }
 
@@ -28,5 +32,9 @@ void configSave() {
   prefs.putString("cur", CFG.currency);
   prefs.putFloat("gst", CFG.gstPercent);
   prefs.putLong("tz", CFG.tzOffset);
+  prefs.putString("tgtok", CFG.tgToken);
+  prefs.putString("tgchat", CFG.tgChat);
+  prefs.putBool("tgen", CFG.tgEnable);
+  prefs.putBool("tgauto", CFG.tgAutoPaid);
   prefs.end();
 }

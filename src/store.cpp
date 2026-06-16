@@ -90,6 +90,45 @@ bool storeGet(uint32_t id, Txn& out) {
   return found;
 }
 
+uint32_t storeMarkOldestPendingPaid(double amount) {
+  xSemaphoreTake(fmtx, portMAX_DELAY);
+  JsonDocument doc; load(doc);
+  uint32_t matched = 0;
+  for (JsonObject o : doc.as<JsonArray>()) {       // array is oldest-first
+    if (o["status"] == (uint8_t)TX_PENDING &&
+        fabs(o["amount"].as<double>() - amount) < 0.01) {
+      o["status"] = (uint8_t) TX_PAID;
+      matched = o["id"];
+      break;
+    }
+  }
+  if (matched) save(doc);
+  xSemaphoreGive(fmtx);
+  return matched;
+}
+
+void storeSummary(double& todayTotal, uint32_t& todayCount, uint32_t& pending) {
+  todayTotal = 0; todayCount = 0; pending = 0;
+  time_t now = time(nullptr);
+  struct tm tnow; localtime_r(&now, &tnow);
+
+  xSemaphoreTake(fmtx, portMAX_DELAY);
+  JsonDocument doc; load(doc);
+  for (JsonObject o : doc.as<JsonArray>()) {
+    uint8_t st = o["status"];
+    if (st == TX_PENDING) pending++;
+    if (st == TX_PAID) {
+      time_t ts = (time_t) o["ts"].as<uint32_t>();
+      struct tm tt; localtime_r(&ts, &tt);
+      if (ts && tt.tm_year == tnow.tm_year && tt.tm_yday == tnow.tm_yday) {
+        todayTotal += o["amount"].as<double>();
+        todayCount++;
+      }
+    }
+  }
+  xSemaphoreGive(fmtx);
+}
+
 void storeToJson(JsonArray arr) {
   xSemaphoreTake(fmtx, portMAX_DELAY);
   JsonDocument doc; load(doc);

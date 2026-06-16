@@ -50,7 +50,28 @@ $("chargeBtn").onclick = async () => {
   $("qrbox").innerHTML = `<img src="/api/qr.svg?data=${encodeURIComponent(res.upi)}" alt="QR"/>`;
   $("ovOpen").href = res.upi;
   $("overlay").classList.remove("hidden");
+  startTxnWatch();   // auto-close + mark paid if Telegram confirms the payment
 };
+
+// Poll the open bill's status; if it becomes paid (e.g. via Telegram), reflect it.
+let txnWatch;
+function startTxnWatch() {
+  clearInterval(txnWatch);
+  txnWatch = setInterval(async () => {
+    if (currentTxn == null) return clearInterval(txnWatch);
+    try {
+      const t = await api("/api/txn?id=" + currentTxn);
+      if (t.status === 1) {            // paid
+        clearInterval(txnWatch);
+        closeOverlay(); toast("Payment received ✓");
+        amountStr = "0"; renderAmount(); $("noteInp").value = "";
+        loadTxns();
+      } else if (t.status === 2) {     // cancelled elsewhere
+        clearInterval(txnWatch); closeOverlay(); loadTxns();
+      }
+    } catch (e) {}
+  }, 2500);
+}
 
 $("ovPaid").onclick = async () => {
   await api("/api/paid", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -64,7 +85,7 @@ $("ovCancel").onclick = async () => {
     body: JSON.stringify({ id: currentTxn }) });
   closeOverlay(); loadTxns();
 };
-function closeOverlay() { $("overlay").classList.add("hidden"); currentTxn = null; }
+function closeOverlay() { $("overlay").classList.add("hidden"); currentTxn = null; clearInterval(txnWatch); }
 $("overlay").addEventListener("click", e => { if (e.target.id === "overlay") closeOverlay(); });
 
 // ---- transactions / payments ------------------------------------------------
@@ -121,6 +142,8 @@ async function loadConfig() {
   CFG = c;
   $("cVpa").value = c.vpa; $("cPayee").value = c.payee; $("cShop").value = c.shopName;
   $("cCur").value = c.currency; $("cGst").value = c.gst; $("cTz").value = c.tzOffset;
+  $("cTgTok").value = c.tgToken || ""; $("cTgChat").value = c.tgChat || "";
+  $("cTgEn").checked = !!c.tgEnable; $("cTgAuto").checked = !!c.tgAutoPaid;
   $("gstPct").textContent = c.gst;
   renderAmount();
 }
@@ -128,11 +151,62 @@ $("saveCfg").onclick = async () => {
   const body = {
     vpa: $("cVpa").value.trim(), payee: $("cPayee").value.trim(),
     shopName: $("cShop").value.trim(), currency: $("cCur").value.trim() || "Rs",
-    gst: parseFloat($("cGst").value) || 0, tzOffset: parseInt($("cTz").value) || 19800
+    gst: parseFloat($("cGst").value) || 0, tzOffset: parseInt($("cTz").value) || 19800,
+    tgToken: $("cTgTok").value.trim(), tgChat: $("cTgChat").value.trim(),
+    tgEnable: $("cTgEn").checked, tgAutoPaid: $("cTgAuto").checked
   };
   const r = await api("/api/config", { method: "POST",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (r.ok) { toast("Saved ✓"); loadState(); loadConfig(); }
+};
+$("tgTest").onclick = async () => {
+  await fetch("/api/telegram/test", { method: "POST" });
+  toast("Test sent — check Telegram");
+};
+
+// ---- WiFi management --------------------------------------------------------
+async function loadWifiInfo() {
+  try {
+    const w = await api("/api/wifi");
+    $("wifiNow").innerHTML = w.connected
+      ? `Connected to <b>${w.ssid}</b> · ${w.ip} · ${w.rssi}dBm`
+      : "Not connected";
+  } catch (e) {}
+}
+$("wifiScan").onclick = async () => {
+  $("wifiList").innerHTML = `<p class="muted small">Scanning…</p>`;
+  for (let i = 0; i < 8; i++) {
+    const r = await api("/api/wifi/scan");
+    if (!r.scanning) {
+      const nets = (r.nets || []).sort((a, b) => b.rssi - a.rssi);
+      $("wifiList").innerHTML = nets.map(n =>
+        `<div class="wifi" onclick="pickWifi('${n.ssid.replace(/'/g, "\\'")}')">
+           <span>${n.lock ? "🔒" : "📶"}</span><span>${n.ssid}</span>
+           <span class="grow"></span><span class="muted small">${n.rssi}dBm</span>
+         </div>`).join("") || `<p class="muted small">No networks found.</p>`;
+      return;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  $("wifiList").innerHTML = `<p class="muted small">Scan timed out, try again.</p>`;
+};
+window.pickWifi = (ssid) => { $("wifiSsid").value = ssid; $("wifiPass").focus(); };
+$("wifiConnect").onclick = async () => {
+  const ssid = $("wifiSsid").value.trim();
+  if (!ssid) return toast("Pick or type a network");
+  await api("/api/wifi/connect", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ssid, password: $("wifiPass").value }) });
+  toast("Switching WiFi… the device may drop offline briefly");
+};
+
+// ---- device actions ---------------------------------------------------------
+$("btnReboot").onclick = async () => {
+  if (!confirm("Reboot the device?")) return;
+  await fetch("/api/reboot", { method: "POST" }); toast("Rebooting…");
+};
+$("btnResetWifi").onclick = async () => {
+  if (!confirm("Forget WiFi and reopen the setup hotspot?")) return;
+  await fetch("/api/wifi/reset", { method: "POST" }); toast("Resetting WiFi…");
 };
 
 // ---- state / header ---------------------------------------------------------
@@ -155,7 +229,13 @@ document.querySelectorAll(".tabbtn").forEach(b => b.onclick = () => {
   b.classList.add("active");
   $("tab-" + b.dataset.tab).classList.add("active");
   if (b.dataset.tab === "pay") loadTxns();
+  if (b.dataset.tab === "set") loadWifiInfo();
 });
+
+// keep the Payments tab live so Telegram auto-confirmations show up
+setInterval(() => {
+  if ($("tab-pay").classList.contains("active")) loadTxns();
+}, 5000);
 
 // ---- toast ------------------------------------------------------------------
 let toastT;
