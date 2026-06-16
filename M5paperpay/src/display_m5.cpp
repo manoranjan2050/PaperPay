@@ -14,6 +14,7 @@
 #include "qrpay.h"
 #include "telegram.h"
 #include <M5Unified.h>
+#include <math.h>
 
 #define SCR_W 960
 #define SCR_H 540
@@ -34,20 +35,45 @@ static double  pAmount = 0;
 static uint32_t pId = 0;
 
 // ---- active bill / on-device input -----------------------------------------
-static String   amountStr = "0";
+static String   amountStr = "0";   // calculator display / current number
 static uint32_t curId = 0;
 static double   curAmount = 0;
 static String   curUpi;
 
+// calculator state
+static double calcAcc = 0;
+static char   calcOp = 0;
+static bool   calcFresh = true;    // next digit starts a fresh number
+
+static String fmtNum(double v) {
+  char b[24];
+  if (v == (long long)v && fabs(v) < 1e12) snprintf(b, sizeof(b), "%lld", (long long)v);
+  else                                     snprintf(b, sizeof(b), "%.2f", v);
+  return String(b);
+}
+static double applyOp(double a, char op, double b) {
+  switch (op) { case '+': return a + b; case '-': return a - b;
+                case 'x': return a * b; case '/': return b != 0 ? a / b : 0; }
+  return b;
+}
+
 struct Btn { int x, y, w, h; const char* label; };
-static Btn keys[12] = {
-  {30,180,140,74,"7"},{182,180,140,74,"8"},{334,180,140,74,"9"},
-  {30,264,140,74,"4"},{182,264,140,74,"5"},{334,264,140,74,"6"},
-  {30,348,140,74,"1"},{182,348,140,74,"2"},{334,348,140,74,"3"},
-  {30,432,140,74,"C"},{182,432,140,74,"0"},{334,432,140,74,"<"},
+
+// calculator keypad (left side): digits + . and the four operators + =
+#define NKEYS 18
+static Btn keys[NKEYS] = {
+  {20,138,110,64,"C"},{138,138,110,64,"DEL"},{256,138,110,64,"/"},{374,138,110,64,"x"},
+  {20,208,110,64,"7"},{138,208,110,64,"8"},{256,208,110,64,"9"},{374,208,110,64,"-"},
+  {20,278,110,64,"4"},{138,278,110,64,"5"},{256,278,110,64,"6"},{374,278,110,64,"+"},
+  {20,348,110,64,"1"},{138,348,110,64,"2"},{256,348,110,64,"3"},{374,348,110,134,"="},
+  {20,418,228,64,"0"},{256,418,110,64,"."},
 };
-static Btn bCharge = {500,180,440,150,"CHARGE  (show UPI QR)"};
-static Btn bCash   = {500,346,440,90,"CASH PAID"};
+static Btn bCharge = {500,138,440,170,"CHARGE  ->  UPI QR"};
+static Btn bCash   = {500,322,440,90,"CASH PAID"};
+
+static bool isOpLabel(const char* l) {
+  char c = l[0]; return (c == '+' || c == '-' || c == 'x' || c == '/' || c == '=');
+}
 static Btn bPaid   = {40,392,210,78,"MARK PAID"};
 static Btn bCancel = {270,392,170,78,"CANCEL"};
 
@@ -102,14 +128,16 @@ static void renderBill(epd_mode_t m = epd_mode_t::epd_fast) {
   cv->fillSprite(C_WHITE);
   header();
 
-  cv->drawRoundRect(20, 66, 920, 96, 12, C_BLACK);
-  txt("Amount to charge", 36, 78, 0.8, lgfx::TL_DATUM);
-  txt(CFG.currency + " " + amountStr, 920, 112, 2.2, lgfx::MR_DATUM);
+  // calculator display bar
+  cv->drawRoundRect(20, 60, 920, 68, 10, C_BLACK);
+  String pend = calcOp ? (fmtNum(calcAcc) + " " + String((char)calcOp)) : String("");
+  txt(pend, 36, 80, 0.9, lgfx::TL_DATUM);
+  txt(CFG.currency + " " + amountStr, 924, 94, 1.5, lgfx::MR_DATUM);
 
-  for (int i = 0; i < 12; i++) drawBtn(keys[i], false, 1.4);
+  for (int i = 0; i < NKEYS; i++) drawBtn(keys[i], isOpLabel(keys[i].label), 1.2);
   drawBtn(bCharge, true, 1.0);
   drawBtn(bCash, false, 1.0);
-  txt("Bill here, or from the phone dashboard", 720, 452, 0.7, lgfx::MC_DATUM);
+  txt("Calculator: + - x / =  then CHARGE", 720, 432, 0.7, lgfx::MC_DATUM);
   push(m);
 }
 
@@ -183,20 +211,43 @@ static void render() {
 }
 
 // ---- on-device actions ------------------------------------------------------
-static void onKey(const char* k) {
-  String key(k);
-  if (key == "C") amountStr = "0";
-  else if (key == "<") { amountStr.remove(amountStr.length() - 1); if (!amountStr.length()) amountStr = "0"; }
-  else {
-    int dot = amountStr.indexOf('.');
-    if (dot >= 0 && amountStr.length() - dot > 2) return;
-    if (amountStr == "0") amountStr = "";
-    amountStr += key;
+static void calcEquals() {
+  if (calcOp) {
+    amountStr = fmtNum(applyOp(calcAcc, calcOp, amountStr.toDouble()));
+    calcOp = 0; calcFresh = true;
+  }
+}
+
+static void calcInput(const String& k) {
+  if (k == "C") { amountStr = "0"; calcAcc = 0; calcOp = 0; calcFresh = true; }
+  else if (k == "DEL") {
+    if (!calcFresh) { amountStr.remove(amountStr.length() - 1);
+      if (!amountStr.length() || amountStr == "-") amountStr = "0"; }
+  }
+  else if (k == "+" || k == "-" || k == "x" || k == "/") {
+    if (calcOp && !calcFresh) {        // chain: 30 + 40 then x -> evaluate first
+      amountStr = fmtNum(applyOp(calcAcc, calcOp, amountStr.toDouble()));
+      calcAcc = amountStr.toDouble();
+    } else {
+      calcAcc = amountStr.toDouble();
+    }
+    calcOp = k[0]; calcFresh = true;
+  }
+  else if (k == "=") { calcEquals(); }
+  else {                               // digit or "."
+    if (calcFresh) { amountStr = (k == "." ? "0." : k); calcFresh = false; }
+    else if (k == ".") { if (amountStr.indexOf('.') < 0) amountStr += "."; }
+    else {
+      int dot = amountStr.indexOf('.');
+      if (dot >= 0 && amountStr.length() - dot > 2) return;   // max 2 decimals
+      if (amountStr == "0") amountStr = k; else amountStr += k;
+    }
   }
   renderBill();
 }
 
 static void doCharge(bool cash) {
+  calcEquals();                        // finalize any pending calculation
   double a = amountStr.toDouble();
   if (a <= 0) return;
   if (cash) {
@@ -205,7 +256,7 @@ static void doCharge(bool cash) {
     curAmount = a;
     char b[80]; snprintf(b, sizeof(b), "Cash bill #%u PAID (%s%.2f)", id, CFG.currency.c_str(), a);
     tgNotify(String(b));
-    mode = Mode::Paid; render(); amountStr = "0";
+    mode = Mode::Paid; render(); amountStr = "0"; calcAcc = 0; calcOp = 0; calcFresh = true;
   } else {
     if (CFG.vpa.length() == 0) return;
     uint32_t id = storeAdd(a, "");
@@ -213,14 +264,14 @@ static void doCharge(bool cash) {
     curUpi = upiBuildUrl(CFG.vpa, CFG.payee, a, "Bill #" + String(id));
     char b[80]; snprintf(b, sizeof(b), "New bill #%u: %s%.2f", id, CFG.currency.c_str(), a);
     tgNotify(String(b));
-    mode = Mode::Payment; render(); amountStr = "0";
+    mode = Mode::Payment; render(); amountStr = "0"; calcAcc = 0; calcOp = 0; calcFresh = true;
   }
 }
 
 static void onTap(int x, int y) {
   switch (mode) {
     case Mode::Bill:
-      for (int i = 0; i < 12; i++) if (inRect(keys[i], x, y)) { onKey(keys[i].label); return; }
+      for (int i = 0; i < NKEYS; i++) if (inRect(keys[i], x, y)) { calcInput(keys[i].label); return; }
       if (inRect(bCharge, x, y)) { doCharge(false); return; }
       if (inRect(bCash, x, y))   { doCharge(true);  return; }
       break;
