@@ -176,13 +176,13 @@ static void apiWifiInfo(AsyncWebServerRequest* req) {
 }
 
 static void apiWifiScan(AsyncWebServerRequest* req) {
-  int n = WiFi.scanComplete();
-  if (n == -2) WiFi.scanNetworks(true);     // -2 = not started -> kick it off
+  // synchronous scan (keep STA so we don't drop the current connection)
+  int n = WiFi.scanNetworks(false /*async*/, true /*show hidden*/);
   JsonDocument doc;
-  if (n < 0) { doc["scanning"] = true; sendJson(req, doc); return; }
   doc["scanning"] = false;
   JsonArray arr = doc["nets"].to<JsonArray>();
   for (int i = 0; i < n; i++) {
+    if (WiFi.SSID(i).isEmpty()) continue;          // skip hidden/blank
     JsonObject o = arr.add<JsonObject>();
     o["ssid"] = WiFi.SSID(i);
     o["rssi"] = WiFi.RSSI(i);

@@ -38,17 +38,37 @@ static String urlEncode(const String& s) {
   return o;
 }
 
-static bool tgApiGet(const String& path, String& out) {
+// Telegram core IP — many ISPs (esp. in IN) DNS-block api.telegram.org, so we
+// connect straight to the IP with SNI/cert checks off and a Host header. Falls
+// back to the hostname (normal DNS) on networks that don't block it.
+#define TG_IP "149.154.167.220"
+
+static bool tgHttpGet(const char* host, const String& path, String& out) {
   if (CFG.tgToken.isEmpty()) return false;
-  WiFiClientSecure cli; cli.setInsecure();
-  HTTPClient http;
-  String url = "https://api.telegram.org/bot" + CFG.tgToken + path;
-  if (!http.begin(cli, url)) return false;
-  http.setTimeout(30000);
-  int code = http.GET();
-  if (code == 200) out = http.getString();
-  http.end();
-  return code == 200;
+  WiFiClientSecure cli;
+  cli.setInsecure();
+  cli.setHandshakeTimeout(20);
+  if (!cli.connect(host, 443)) { cli.stop(); return false; }
+  cli.print("GET /bot" + CFG.tgToken + path + " HTTP/1.0\r\n"
+            "Host: api.telegram.org\r\n"
+            "User-Agent: PaperPay\r\n"
+            "Connection: close\r\n\r\n");
+  String resp;
+  uint32_t t = millis();
+  while ((cli.connected() || cli.available()) && millis() - t < 25000) {
+    while (cli.available()) { resp += (char) cli.read(); t = millis(); }
+    delay(5);
+  }
+  cli.stop();
+  int p = resp.indexOf("\r\n\r\n");
+  if (p < 0) return false;
+  out = resp.substring(p + 4);
+  return resp.indexOf(" 200 ") > 0;
+}
+
+static bool tgApiGet(const String& path, String& out) {
+  if (tgHttpGet(TG_IP, path, out)) return true;           // bypass DNS block
+  return tgHttpGet("api.telegram.org", path, out);        // fallback via DNS
 }
 
 // real send (blocking) — only called from the task

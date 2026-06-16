@@ -4,3 +4,6 @@
 *.elf
 *.map
 build/
+
+# local WiFi credentials — never commit
+include/wifi_secrets.h

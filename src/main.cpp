@@ -20,6 +20,13 @@
 #include "telegram.h"
 #include "netctl.h"
 
+// optional local WiFi credentials (git-ignored include/wifi_secrets.h)
+#if defined(__has_include)
+#  if __has_include("wifi_secrets.h")
+#    include "wifi_secrets.h"
+#  endif
+#endif
+
 // ---- deferred network actions (requested by web task, run on loop task) -----
 static SemaphoreHandle_t netMtx;
 static volatile bool reqReboot = false, reqReset = false, reqConnect = false;
@@ -103,7 +110,21 @@ void setup() {
   // ---- WiFi: non-blocking captive portal -----------------------------------
   WiFi.persistent(true);
   WiFi.setSleep(false);   // keep radio awake (reachability) for the whole session
+
+#ifdef WIFI_SSID
+  // hard-coded network (from include/wifi_secrets.h) — connect directly on boot.
+  // Keeps retrying in the background; if creds are wrong/AP weak, the portal
+  // below still comes up as a fallback after a short wait.
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
+  Serial.print("[wifi] connecting to " WIFI_SSID " ");
+  for (int i = 0; i < 16 && WiFi.status() != WL_CONNECTED; i++) { delay(500); Serial.print('.'); }
+  Serial.printf(" %s\n", WiFi.status() == WL_CONNECTED ? "OK" : "(failed - opening setup portal)");
+#endif
+
   wm     = new WiFiManager();
+  wm->setConnectTimeout(8);             // don't block boot if creds are wrong
   pVpa   = new WiFiManagerParameter("vpa",   "UPI ID (VPA)", CFG.vpa.c_str(),      64);
   pPayee = new WiFiManagerParameter("payee", "Payee name",   CFG.payee.c_str(),    48);
   pShop  = new WiFiManagerParameter("shop",  "Shop name",    CFG.shopName.c_str(), 48);
