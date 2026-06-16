@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0b6b53" />
+  <title>PaperPay</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">▣</span>
+      <div>
+        <h1 id="shopName">PaperPay</h1>
+        <small id="status"><span class="dot" id="dot"></span> connecting…</small>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ========================= BILL ========================= -->
+    <section id="tab-bill" class="tab active">
+      <div class="amount-card">
+        <div class="amount-label">Amount to charge</div>
+        <div class="amount" id="amount">0.00</div>
+        <label class="gst-row">
+          <input type="checkbox" id="gstChk" />
+          <span>Add GST (<span id="gstPct">0</span>%)</span>
+          <span class="grow"></span>
+          <span id="gstAmt" class="muted"></span>
+        </label>
+      </div>
+
+      <div class="keypad">
+        <button class="key" data-k="7">7</button>
+        <button class="key" data-k="8">8</button>
+        <button class="key" data-k="9">9</button>
+        <button class="key" data-k="4">4</button>
+        <button class="key" data-k="5">5</button>
+        <button class="key" data-k="6">6</button>
+        <button class="key" data-k="1">1</button>
+        <button class="key" data-k="2">2</button>
+        <button class="key" data-k="3">3</button>
+        <button class="key" data-k="00">00</button>
+        <button class="key" data-k="0">0</button>
+        <button class="key" data-k="." >.</button>
+      </div>
+
+      <div class="row">
+        <button class="btn ghost" id="clearBtn">Clear</button>
+        <button class="btn ghost" id="backBtn">⌫</button>
+      </div>
+
+      <input id="noteInp" class="note" placeholder="Note (optional) — e.g. Groceries" />
+      <button class="btn primary big" id="chargeBtn">Generate UPI QR →</button>
+    </section>
+
+    <!-- ========================= PAYMENTS ========================= -->
+    <section id="tab-pay" class="tab">
+      <div class="summary">
+        <div class="stat"><div class="big" id="todayTotal">0</div><div class="muted">Today's sales</div></div>
+        <div class="stat"><div class="big" id="todayCount">0</div><div class="muted">Payments</div></div>
+        <div class="stat"><div class="big" id="pendCount">0</div><div class="muted">Pending</div></div>
+      </div>
+      <div id="txList" class="txlist"></div>
+    </section>
+
+    <!-- ========================= SETTINGS ========================= -->
+    <section id="tab-set" class="tab">
+      <label class="fld"><span>UPI ID (VPA)</span><input id="cVpa" placeholder="shop@okhdfcbank" /></label>
+      <label class="fld"><span>Payee name</span><input id="cPayee" placeholder="My Shop" /></label>
+      <label class="fld"><span>Shop name</span><input id="cShop" placeholder="My Shop" /></label>
+      <label class="fld"><span>Currency symbol</span><input id="cCur" placeholder="Rs" /></label>
+      <label class="fld"><span>Default GST %</span><input id="cGst" type="number" step="0.1" placeholder="0" /></label>
+      <label class="fld"><span>Timezone offset (sec)</span><input id="cTz" type="number" placeholder="19800" /></label>
+      <button class="btn primary" id="saveCfg">Save settings</button>
+      <p class="muted small">Find your UPI ID in any UPI app (PhonePe/GPay/Paytm) → "My QR / Payment address". IST offset = 19800.</p>
+    </section>
+  </main>
+
+  <!-- ========================= QR OVERLAY ========================= -->
+  <div id="overlay" class="overlay hidden">
+    <div class="qrcard">
+      <div class="qramt">Pay <span id="ovAmt">0.00</span></div>
+      <div id="qrbox" class="qrbox"></div>
+      <p class="muted small">Scan with any UPI app · also shown on the counter screen</p>
+      <a id="ovOpen" class="btn ghost" href="#">Open in UPI app</a>
+      <div class="row">
+        <button class="btn danger" id="ovCancel">Cancel</button>
+        <button class="btn primary" id="ovPaid">✓ Mark Paid</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tabbar">
+    <button class="tabbtn active" data-tab="bill">💳<span>Bill</span></button>
+    <button class="tabbtn" data-tab="pay">📜<span>Payments</span></button>
+    <button class="tabbtn" data-tab="set">⚙️<span>Settings</span></button>
+  </nav>
+
+  <script src="/app.js"></script>
+</body>
+</html>
