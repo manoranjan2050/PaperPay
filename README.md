@@ -1,110 +1,165 @@
-# PaperPay — E‑Paper UPI Counter
+<!-- ========================== HEADER ========================== -->
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0ea975,100:16b886&height=210&section=header&text=PaperPay&fontSize=82&fontColor=ffffff&fontAlignY=36&desc=E-Paper%20UPI%20Counter%20for%20Shops&descSize=22&descAlignY=60&animation=fadeIn" width="100%"/>
+</p>
 
-A tiny shop payment counter on an **ESP32‑S3‑N16R8** with a **Waveshare 2.9″ e‑paper**
-display. Bill an amount from a phone/PC, and a **UPI QR code** appears both on the
-e‑paper (facing the customer) and on the dashboard. The customer scans with any UPI app
-(GPay / PhonePe / Paytm / BHIM) and pays. You log it with one tap.
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Segoe+UI&weight=600&size=22&pause=900&color=16B886&center=true&vCenter=true&width=620&lines=Tap+an+amount+%E2%86%92+show+a+UPI+QR;Customer+scans+with+any+UPI+app;Forward+the+SMS+%E2%86%92+auto-marked+paid;No+cloud.+No+app+store.+Just+WiFi." alt="typing" />
+</p>
 
-No cloud, no app store — the ESP32 hosts everything over WiFi at **http://paperpay.local**.
+<p align="center">
+  <img src="https://img.shields.io/badge/ESP32--S3-N16R8-E7352C?logo=espressif&logoColor=white" />
+  <img src="https://img.shields.io/badge/PlatformIO-Arduino-FF7F00?logo=platformio&logoColor=white" />
+  <img src="https://img.shields.io/badge/Display-Waveshare%202.9%22%20e--Paper-555555" />
+  <img src="https://img.shields.io/badge/Pay-UPI-097969?logo=googlepay&logoColor=white" />
+  <img src="https://img.shields.io/badge/Bot-Telegram-26A5E4?logo=telegram&logoColor=white" />
+  <img src="https://img.shields.io/badge/License-MIT-16b886" />
+</p>
 
+<p align="center"><b>A tiny self-hosted payment counter.</b> An ESP32-S3 hosts a mobile dashboard over WiFi, builds a <br/><code>upi://pay</code> QR for the billed amount, shows it on a 2.9" e-paper facing the customer, and logs every sale.</p>
+
+<!-- ========================== HERO ========================== -->
+<table align="center"><tr>
+  <td align="center" width="62%"><img src="assets/device.svg" width="460"/><br/><sub>Customer-facing e-paper</sub></td>
+  <td align="center" width="38%"><img src="assets/dashboard.svg" width="210"/><br/><sub>Phone / PC dashboard</sub></td>
+</tr></table>
+
+---
+
+## ✨ Features
+
+| | |
+|---|---|
+| 📱 **Mobile dashboard** | Calculator + keypad, works in any browser — no install. |
+| 🧾 **UPI QR on demand** | Builds `upi://pay?...` and renders the QR on the e-paper **and** on screen. |
+| 🖥️ **Sunlight-readable e-paper** | Customer-facing amount + QR, ultra-low power. |
+| 🤖 **Telegram bot** | Bill & paid alerts, `/today` `/pending` commands. |
+| ✅ **Auto-confirm payments** | Forward your bank/UPI "credited ₹X" SMS → the matching bill is **auto-marked paid**, e-paper flips to *Paid*, dashboard QR closes itself. |
+| 📜 **Payment manager** | Today's sales, pending vs paid, full log on flash. |
+| ⚙️ **Captive-portal setup** | First boot opens a `PaperPay-Setup` hotspot for WiFi + UPI details. |
+| 📶 **WiFi from the dashboard** | Scan & switch networks, reboot, factory-reset — no re-flash. |
+
+---
+
+## 🧠 How it works
+
+```mermaid
+flowchart LR
+    P["📱 Phone / PC<br/>dashboard"] -- "WiFi · HTTP" --> E
+    subgraph E["ESP32-S3 · PaperPay"]
+        W["Web server<br/>+ calculator"] --> Q["UPI QR<br/>generator"]
+        Q --> D["2.9&quot; e-paper"]
+        L["Payment log<br/>(LittleFS)"]
+        T["Telegram task"]
+    end
+    D -- "shows QR" --> C["🧑 Customer<br/>UPI app"]
+    C -- "pays" --> BANK["🏦 Bank / UPI"]
+    BANK -- "credited SMS<br/>(forwarded)" --> T
+    T -- "match amount → mark paid" --> L
+    style E fill:#0f1115,stroke:#16b886,color:#e8edf2
+    style Q fill:#10271f,stroke:#16b886,color:#16b886
+    style D fill:#f6f6f0,stroke:#888,color:#111
 ```
- ┌─────────────┐      WiFi       ┌──────────────────────────┐
- │  Your phone │  ───────────▶   │  ESP32‑S3  (web server)  │
- │  / PC       │  dashboard      │  • calculator + billing  │
- └─────────────┘                 │  • UPI QR generator      │
-                                 │  • payment log (LittleFS)│
-                                 └────────────┬─────────────┘
-                                              │ SPI
-                                     ┌────────▼────────┐
-                                     │  2.9" e‑paper   │  ← customer scans QR
-                                     └─────────────────┘
+
+<details>
+<summary><b>💳 A sale, step by step</b></summary>
+
+```mermaid
+sequenceDiagram
+    actor S as Shopkeeper
+    participant W as Dashboard
+    participant E as e-Paper
+    actor C as Customer
+    participant T as Telegram
+    S->>W: Type amount → Generate QR
+    W->>E: Show ₹ + UPI QR
+    W-->>S: Show QR on phone too
+    C->>E: Scan QR, pay in UPI app
+    Note over C,T: Bank SMS forwarded to the bot
+    T->>W: Amount matches open bill → mark PAID
+    W->>E: "Paid ✓"
+    W-->>S: Bill auto-closes
 ```
+</details>
 
-## Features
-- 📱 **Mobile‑friendly dashboard** (works on any browser, no install) with a calculator + keypad.
-- 🧾 **UPI QR generation** — builds a `upi://pay?...` deep link and renders the QR on the e‑paper and on screen.
-- 🖥️ **Customer‑facing e‑paper** shows the amount + QR; ultra‑low power, readable in sunlight.
-- 📜 **Payment manager** — today's sales, pending vs paid, full log (kept on flash).
-- ⚙️ **Captive‑portal onboarding** — first boot creates a `PaperPay-Setup` WiFi AP to enter WiFi + UPI ID.
-- 🏷️ Optional **GST**, custom currency symbol, shop name.
+---
 
-## Hardware & wiring
-Waveshare 2.9″ B/W module → ESP32‑S3 (defaults in [`include/config.h`](include/config.h)):
+## 🔌 Wiring — Waveshare 2.9" → ESP32-S3
 
-| e‑paper | wire   | ESP32‑S3 GPIO |
-|---------|--------|---------------|
-| BUSY    | purple | 7  |
-| RST     | white  | 8  |
-| DC      | green  | 9  |
-| CS      | orange | 10 |
-| CLK/SCK | yellow | 12 |
-| DIN/MOSI| blue   | 11 |
-| VCC     | red    | 3V3 |
-| GND     | black  | GND |
+<details open>
+<summary><b>Pin map</b> (defaults in <code>include/config.h</code>)</summary>
 
-> **Panel variant:** code defaults to `GxEPD2_290_T94_V2` (SSD1680, the common current
-> module). If the screen stays blank or mirrored, edit `epd` in
-> [`src/display.cpp`](src/display.cpp) to `GxEPD2_290_T94` or `GxEPD2_290`.
+| e-Paper | Cable | ESP32-S3 | | e-Paper | Cable | ESP32-S3 |
+|---|---|---|---|---|---|---|
+| **VCC** | 🔴 | `3V3` | | **DC**  | 🟢 | `GPIO 9` |
+| **GND** | ⚫ | `GND`  | | **RST** | ⚪ | `GPIO 8` |
+| **DIN** | 🔵 | `GPIO 11` | | **BUSY**| 🟣 | `GPIO 7` |
+| **CLK** | 🟡 | `GPIO 12` | | | | |
+| **CS**  | 🟠 | `GPIO 10` | | | | |
 
-## Build & flash (PlatformIO)
+> ⚠️ **VCC = 3.3 V only.** Power the board from a real wall charger, not a weak USB port.
+</details>
+
+---
+
+## 🚀 Quick start
+
 ```bash
-# from this folder
-pio run                       # compile
-pio run -t uploadfs           # upload the web dashboard (data/) to LittleFS
-pio run -t upload             # flash the firmware
-pio device monitor            # watch logs
-```
-(VS Code + the PlatformIO extension works too: *Build*, *Upload Filesystem Image*, *Upload*.)
-
-## First‑time setup
-1. Power the board. The e‑paper shows **"Join AP: PaperPay‑Setup"**.
-2. On your phone, join the WiFi **`PaperPay-Setup`**; the captive portal opens.
-3. Pick your home/shop WiFi, enter the password, and fill in **UPI ID**, **payee name**, **shop name**.
-4. It reboots, joins your WiFi, and the e‑paper shows the shop name + **http://paperpay.local**.
-5. Open that URL on any device on the same network → start billing.
-
-## How a sale works
-1. Type the amount on the keypad (toggle GST if you set one) → **Generate UPI QR**.
-2. The QR shows on the dashboard *and* on the e‑paper facing the customer.
-3. Customer scans & pays in their UPI app.
-4. Tap **Mark Paid** (or **Cancel**). It's saved to the **Payments** log.
-
-## ⚠️ About automatic payment confirmation
-A plain UPI QR (this project) is a **collect‑request link** — the customer's bank app
-handles the payment, so the ESP32 has **no way to automatically know** that money arrived.
-Confirmation here is **manual** (Mark Paid), which is exactly how most small QR‑sticker
-shops already work.
-
-For *automatic* confirmation you need a payment‑gateway merchant account that exposes
-webhooks/UPI‑intent status (e.g. **Razorpay**, **Cashfree**, **PhonePe for Business**).
-The clean way to add it: have a small cloud function receive the gateway webhook and
-POST `/api/paid` to the device (or have the device poll the gateway's order‑status API).
-The `apiPay` handler in [`src/web.cpp`](src/web.cpp) is where you'd create the gateway
-order instead of a local txn.
-
-## REST API (for integrations)
-| Method | Path | Body / Query | Purpose |
-|--------|------|--------------|---------|
-| GET  | `/api/state` | – | connection + shop info |
-| GET/POST | `/api/config` | `{vpa,payee,shopName,currency,gst,tzOffset}` | shop settings |
-| POST | `/api/pay` | `{amount,note}` | create bill, show QR → `{id,upi}` |
-| POST | `/api/paid` | `{id}` | mark a bill paid |
-| POST | `/api/cancel` | `{id}` | cancel a bill |
-| GET  | `/api/transactions` | – | full log (array) |
-| GET  | `/api/qr.svg` | `?data=<text>` | QR as SVG (used by the dashboard) |
-
-## Project layout
-```
-platformio.ini        build config, board + libraries
-include/ + src/
-  config.*            pin map + shop settings (NVS)
-  qrpay.*             UPI URL + QR generation
-  display.*           e‑paper rendering (queued, runs on loop task)
-  store.*             transaction log on LittleFS
-  web.*               async web server + REST API
-  main.cpp            WiFi onboarding, NTP, mDNS, wiring
-data/                 dashboard SPA (index.html, style.css, app.js) → LittleFS
+pio run -t uploadfs     # upload the dashboard (data/) to LittleFS
+pio run -t upload       # flash the firmware
+pio device monitor      # watch the logs
 ```
 
-## License
-MIT — do whatever helps your shop. No warranty.
+1. Power on → e-paper shows **Join AP `PaperPay-Setup`**.
+2. Join that WiFi on your phone → enter your WiFi + **UPI ID / payee / shop name**.
+3. It reboots, joins your WiFi, shows its IP → open `http://<that-ip>` and start billing.
+
+> 💡 **N16R8 must build with `board_build.arduino.memory_type = qio_opi`** (octal PSRAM) — otherwise it boot-loops in `psramInit()`. Already set in [`platformio.ini`](platformio.ini).
+
+<details>
+<summary><b>🤖 Telegram setup</b></summary>
+
+1. `@BotFather` → `/newbot` → copy the **token**.
+2. Message your bot once; get your **Chat ID** (e.g. via `@userinfobot`).
+3. Dashboard → **Settings → Telegram** → paste token + chat ID → **Enable** → **Save** → **Send test**.
+4. Forward a bank/UPI payment SMS into the chat to auto-confirm a matching bill.
+
+> Some ISPs DNS-block Telegram — the firmware connects to Telegram's IP directly to get around it.
+</details>
+
+<details>
+<summary><b>🔗 REST API</b></summary>
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/state` | device + shop info |
+| `GET/POST` | `/api/config` | shop + Telegram settings |
+| `POST` | `/api/pay` | `{amount,note}` → create bill, show QR |
+| `POST` | `/api/paid` · `/api/cancel` | `{id}` update a bill |
+| `GET` | `/api/transactions` · `/api/txn?id=` | log / single bill |
+| `GET` | `/api/qr.svg?data=` | on-screen QR (offline) |
+| `GET` | `/api/wifi[/scan]` · `POST /api/wifi/connect` | WiFi management |
+</details>
+
+---
+
+## 🛠️ Built with
+
+<p align="center">
+  <img src="https://img.shields.io/badge/C++-00599C?logo=cplusplus&logoColor=white" />
+  <img src="https://img.shields.io/badge/GxEPD2-e--paper-555" />
+  <img src="https://img.shields.io/badge/ESPAsyncWebServer-async-orange" />
+  <img src="https://img.shields.io/badge/ArduinoJson-7-5b8" />
+  <img src="https://img.shields.io/badge/WiFiManager-portal-blue" />
+  <img src="https://img.shields.io/badge/LittleFS-storage-777" />
+</p>
+
+```
+include/ + src/   config · qrpay · display · store · web · telegram · netctl · main
+data/             dashboard SPA  (index.html · style.css · app.js)
+assets/           README artwork
+```
+
+<p align="center"><sub>MIT — use it, fork it, run your shop on it. Made with ☕ + 🤖.</sub></p>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:16b886,100:0ea975&height=120&section=footer" width="100%"/>
