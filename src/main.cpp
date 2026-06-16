@@ -38,6 +38,9 @@ static void onSaveParams() {
 // runs once, the moment we first reach STA-connected
 static void onConnected() {
   servicesUp = true;
+  WiFi.setSleep(false);   // CRITICAL: keep radio awake or the web server is
+                          // unreachable/slow from other devices (modem sleep
+                          // drops incoming ARP/TCP between DTIM beacons).
   Serial.printf("[wifi] CONNECTED  ip=%s  rssi=%d\n",
                 WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
   configTime(CFG.tzOffset, 0, "pool.ntp.org", "time.google.com");
@@ -64,6 +67,7 @@ void setup() {
 
   // ---- WiFi: non-blocking captive portal -----------------------------------
   WiFi.persistent(true);
+  WiFi.setSleep(false);   // keep radio awake (reachability) for the whole session
   wm     = new WiFiManager();
   pVpa   = new WiFiManagerParameter("vpa",   "UPI ID (VPA)", CFG.vpa.c_str(),      64);
   pPayee = new WiFiManagerParameter("payee", "Payee name",   CFG.payee.c_str(),    48);
@@ -110,11 +114,11 @@ void loop() {
   static uint32_t t = 0;
   if (millis() - t > 3000) {
     t = millis();
-    Serial.printf("[hb] up=%lus sta=%d portal=%d mode=%d apIP=%s apSSID='%s' apClients=%d\n",
+    Serial.printf("[hb] up=%lus sta=%d staIP=%s rssi=%d portal=%d mode=%d apIP=%s apClients=%d\n",
                   millis()/1000, WiFi.status() == WL_CONNECTED,
+                  WiFi.localIP().toString().c_str(), (int)WiFi.RSSI(),
                   wm->getConfigPortalActive(), WiFi.getMode(),
                   WiFi.softAPIP().toString().c_str(),
-                  WiFi.softAPSSID().c_str(),
                   WiFi.softAPgetStationNum());
   }
   delay(20);
