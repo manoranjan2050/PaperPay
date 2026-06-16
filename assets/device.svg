@@ -17,7 +17,7 @@
   <rect x="70" y="74" width="620" height="244" rx="10" fill="#f6f6f0"/>
 
   <!-- left: shop + amount -->
-  <text x="98" y="120" font-size="20" font-weight="700" fill="#111" letter-spacing="2">MY SHOP</text>
+  <text x="96" y="120" font-size="22" font-weight="800" fill="#111" letter-spacing="0.5">DENGAPOL DAHIBARA</text>
   <text x="96" y="206" font-size="66" font-weight="800" fill="#0a0a0a">₹149.00</text>
   <text x="98" y="250" font-size="19" fill="#444">Scan with any UPI app</text>
   <text x="98" y="276" font-size="19" fill="#444">to pay</text>
