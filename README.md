@@ -26,6 +26,18 @@
 
 ---
 
+## 🖥️ Two hardware builds
+
+| Build | Hardware | Highlights |
+|---|---|---|
+| **PaperPay** (this folder) | ESP32‑S3‑N16R8 + Waveshare 2.9" e‑paper | Cheapest; bill from the phone dashboard |
+| **[M5PaperPay](M5paperpay/)** | M5Stack **M5Paper** (4.7" e‑ink, touch, RTC, battery) | **Bill on the device** (touch keypad), big QR, portable |
+
+Both share the same logic (web dashboard, UPI QR, payment log, Telegram). See
+**[`M5paperpay/`](M5paperpay/)** for the M5Paper port.
+
+---
+
 ## ✨ Features
 
 | | |
